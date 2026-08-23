@@ -2,3 +2,6 @@ sentence-transformers
 pandas
 numpy
 scikit-learn
+joblib
+fastapi
+pydantic
