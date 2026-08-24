@@ -32,9 +32,9 @@ SAME_EVENT / DIFFERENT_EVENT
 
 Article Pair
     ↓
-BGE-base-en-v1.5
+all-MiniLM-L6-v2
     ↓
-768-dimensional embeddings
+384-dimensional embeddings
     ↓
 Feature Extraction
     ↓
