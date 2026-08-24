@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from sentence_transformers import SentenceTransformer
+
 from predict import predict_event_match
 
 
@@ -16,7 +18,20 @@ app = FastAPI(
 
 
 # ============================================================
-# REQUEST SCHEMA
+# EMBEDDING MODEL
+# ============================================================
+
+print("Loading embedding model...")
+
+embedding_model = SentenceTransformer(
+    "sentence-transformers/all-MiniLM-L6-v2"
+)
+
+print("Embedding model loaded.")
+
+
+# ============================================================
+# EVENT MATCH REQUEST
 # ============================================================
 
 class EventMatchRequest(BaseModel):
@@ -35,7 +50,7 @@ class EventMatchRequest(BaseModel):
 
 
 # ============================================================
-# RESPONSE ENDPOINT
+# EVENT MATCH ENDPOINT
 # ============================================================
 
 @app.post("/predict")
@@ -68,4 +83,30 @@ def health():
 
     return {
         "status": "healthy"
+    }
+
+
+# ============================================================
+# EMBEDDING REQUEST
+# ============================================================
+
+class EmbeddingRequest(BaseModel):
+
+    text: str
+
+
+# ============================================================
+# EMBEDDING ENDPOINT
+# ============================================================
+
+@app.post("/embed")
+def generate_embedding(request: EmbeddingRequest):
+
+    embedding = embedding_model.encode(
+        request.text,
+        normalize_embeddings=True
+    )
+
+    return {
+        "embedding": embedding.tolist()
     }
