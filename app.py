@@ -4,7 +4,8 @@ from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 
 from predict import predict_event_match
-
+from datetime import datetime
+import numpy as np
 
 # ============================================================
 # FASTAPI APPLICATION
@@ -16,6 +17,73 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# ============================================================
+# SEMANTIC SIMILARITY
+# ============================================================
+
+def calculate_similarity(
+    text_a: str,
+    text_b: str
+) -> float:
+
+    embedding_a = embedding_model.encode(
+        text_a,
+        normalize_embeddings=True
+    )
+
+    embedding_b = embedding_model.encode(
+        text_b,
+        normalize_embeddings=True
+    )
+
+    return float(
+        np.dot(
+            embedding_a,
+            embedding_b
+        )
+    )
+
+
+# ============================================================
+# TEMPORAL COMPATIBILITY
+# ============================================================
+
+def calculate_temporal_score(
+    date_a: str,
+    date_b: str
+) -> float:
+
+    parsed_a = datetime.strptime(
+        date_a,
+        "%Y-%m-%d"
+    )
+
+    parsed_b = datetime.strptime(
+        date_b,
+        "%Y-%m-%d"
+    )
+
+    days = abs(
+        (parsed_a - parsed_b).days
+    )
+
+    if days == 0:
+        return 1.0
+
+    elif days <= 1:
+        return 0.9
+
+    elif days <= 3:
+        return 0.8
+
+    elif days <= 7:
+        return 0.6
+
+    elif days <= 30:
+        return 0.4
+
+    else:
+        return 0.1
 
 # ============================================================
 # EMBEDDING MODEL
@@ -36,17 +104,8 @@ print("Embedding model loaded.")
 
 class EventMatchRequest(BaseModel):
 
-    article_a_text: str
-    article_b_text: str
-
-    entities_a: str
-    entities_b: str
-
-    date_a: str
-    date_b: str
-
-    location_a: str
-    location_b: str
+    similarity: float
+    temporal_score: float
 
 
 # ============================================================
@@ -56,23 +115,10 @@ class EventMatchRequest(BaseModel):
 @app.post("/predict")
 def predict(request: EventMatchRequest):
 
-    result = predict_event_match(
-
-        article_a_text=request.article_a_text,
-        article_b_text=request.article_b_text,
-
-        entities_a=request.entities_a,
-        entities_b=request.entities_b,
-
-        date_a=request.date_a,
-        date_b=request.date_b,
-
-        location_a=request.location_a,
-        location_b=request.location_b
+    return predict_event_match(
+        similarity=request.similarity,
+        temporal_score=request.temporal_score
     )
-
-    return result
-
 
 # ============================================================
 # HEALTH CHECK

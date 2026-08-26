@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+
+data/
+*.ipynb
+
+.git/
+.idea/
+
+README.md
