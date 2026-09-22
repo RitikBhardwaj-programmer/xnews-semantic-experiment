@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+import os
+
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from sentence_transformers import SentenceTransformer
@@ -16,6 +18,26 @@ app = FastAPI(
     description="ML service for determining whether two articles describe the same event.",
     version="1.0.0"
 )
+
+# ============================================================
+# API KEY AUTH
+# ============================================================
+# The Java backend's JWT layer does not protect this service directly -
+# it is reachable at whatever URL Azure Container Apps exposes it on.
+# This header check is the minimal gate so /embed and /predict aren't
+# open to anyone who finds the URL.
+
+API_KEY = os.environ["AI_SERVICE_API_KEY"]
+
+
+def require_api_key(x_api_key: str = Header(...)):
+
+    if x_api_key != API_KEY:
+
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing API key"
+        )
 
 # ============================================================
 # SEMANTIC SIMILARITY
@@ -112,7 +134,7 @@ class EventMatchRequest(BaseModel):
 # EVENT MATCH ENDPOINT
 # ============================================================
 
-@app.post("/predict")
+@app.post("/predict", dependencies=[Depends(require_api_key)])
 def predict(request: EventMatchRequest):
 
     return predict_event_match(
@@ -145,7 +167,7 @@ class EmbeddingRequest(BaseModel):
 # EMBEDDING ENDPOINT
 # ============================================================
 
-@app.post("/embed")
+@app.post("/embed", dependencies=[Depends(require_api_key)])
 def generate_embedding(request: EmbeddingRequest):
 
     embedding = embedding_model.encode(

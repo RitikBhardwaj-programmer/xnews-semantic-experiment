@@ -324,11 +324,12 @@ classifier.fit(
     X_train,
     y_train
 )
-'''
+
 # ============================================================
 # SAVE TRAINED EVENT MATCHER
 # ============================================================
 
+import json
 from pathlib import Path
 
 MODEL_DIR = Path("models")
@@ -341,6 +342,24 @@ joblib.dump(
     MODEL_PATH
 )
 
+# Record which training run produced this .pkl - without this, a deployed
+# model file has no traceable path back to the data/code that produced it.
+METADATA_PATH = MODEL_DIR / "event_matcher.meta.json"
+
+with open(METADATA_PATH, "w") as metadata_file:
+
+    json.dump(
+        {
+            "trained_at": datetime.now().isoformat(),
+            "source_file": "main2_2features.py",
+            "features": list(X_train.columns),
+            "training_samples": len(X_train),
+            "testing_samples": len(X_test)
+        },
+        metadata_file,
+        indent=2
+    )
+
 print("\n========================================")
 print("MODEL SAVED")
 print("========================================")
@@ -348,6 +367,11 @@ print("========================================")
 print(
     "Model path:",
     MODEL_PATH
+)
+
+print(
+    "Metadata path:",
+    METADATA_PATH
 )
 
 
@@ -387,7 +411,7 @@ print(
     "SAME_EVENT" if prediction == 1
     else "DIFFERENT_EVENT"
 )
-'''
+
 # ============================================================
 # 13. PREDICTIONS
 # ============================================================
