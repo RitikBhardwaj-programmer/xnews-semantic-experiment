@@ -1,11 +1,11 @@
 import os
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from sentence_transformers import SentenceTransformer
 
-from predict import predict_event_match
+from predict import predict_event_matches
 from datetime import datetime
 import numpy as np
 
@@ -124,23 +124,46 @@ print("Embedding model loaded.")
 # EVENT MATCH REQUEST
 # ============================================================
 
+EMBEDDING_DIMENSIONS = 384
+
+
+class EventCandidate(BaseModel):
+
+    event_id: int
+    centroid_embedding: list[float] = Field(
+        min_length=EMBEDDING_DIMENSIONS,
+        max_length=EMBEDDING_DIMENSIONS
+    )
+    temporal_score: float
+
+
 class EventMatchRequest(BaseModel):
 
-    similarity: float
-    temporal_score: float
+    article_embedding: list[float] = Field(
+        min_length=EMBEDDING_DIMENSIONS,
+        max_length=EMBEDDING_DIMENSIONS
+    )
+    candidates: list[EventCandidate]
 
 
 # ============================================================
 # EVENT MATCH ENDPOINT
 # ============================================================
+# One article scored against many event centroids in a single call,
+# instead of one round trip per candidate.
 
 @app.post("/predict", dependencies=[Depends(require_api_key)])
 def predict(request: EventMatchRequest):
 
-    return predict_event_match(
-        similarity=request.similarity,
-        temporal_score=request.temporal_score
-    )
+    return {
+        "results": predict_event_matches(
+            article_embedding=request.article_embedding,
+            candidates=[
+                candidate.model_dump()
+                for candidate in request.candidates
+            ]
+        )
+    }
 
 # ============================================================
 # HEALTH CHECK
