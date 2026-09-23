@@ -1,4 +1,5 @@
 import joblib
+import numpy as np
 import pandas as pd
 from pathlib import Path
 
@@ -17,41 +18,63 @@ model = joblib.load(MODEL_PATH)
 
 
 # ============================================================
-# EVENT MATCH PREDICTION
+# ARTICLE-vs-EVENT MATCH PREDICTION
 # ============================================================
+# The unit being scored is one article against one event centroid,
+# not one article against another article. Similarity is computed
+# here from the two embeddings so callers can't disagree with the
+# model about how it was derived.
 
-def predict_event_match(
-    similarity,
-    temporal_score
+def _normalize(vector):
+
+    array = np.asarray(vector, dtype=np.float64)
+
+    norm = np.linalg.norm(array)
+
+    return array if norm == 0 else array / norm
+
+
+def predict_event_matches(
+    article_embedding,
+    candidates
 ):
 
-    features = pd.DataFrame([
+    if not candidates:
+        return []
+
+    article = _normalize(article_embedding)
+
+    similarities = [
+        float(
+            np.dot(
+                article,
+                _normalize(candidate["centroid_embedding"])
+            )
+        )
+        for candidate in candidates
+    ]
+
+    features = pd.DataFrame({
+        "similarity": similarities,
+        "temporal_score": [
+            candidate["temporal_score"]
+            for candidate in candidates
+        ]
+    })
+
+    probabilities = model.predict_proba(
+        features
+    )[:, 1]
+
+    return [
         {
-            "similarity": similarity,
-            "temporal_score": temporal_score
+            "event_id": candidate["event_id"],
+            "probability": float(probability),
+            "similarity": similarity
         }
-    ])
-
-    probability = model.predict_proba(
-        features
-    )[0][1]
-
-    prediction = model.predict(
-        features
-    )[0]
-
-    return {
-        "probability": float(probability),
-        "prediction": (
-            "SAME_EVENT"
-            if prediction == 1
-            else "DIFFERENT_EVENT"
-        ),
-        "features": {
-            "similarity": float(similarity),
-            "temporal_score": float(temporal_score)
-        }
-    }
+        for candidate, probability, similarity
+        in zip(candidates, probabilities, similarities)
+    ]
 
 
 # ============================================================
@@ -60,27 +83,29 @@ def predict_event_match(
 
 if __name__ == "__main__":
 
-    result = predict_event_match(
-        similarity=0.80,
-        temporal_score=1.0
+    rng = np.random.default_rng(0)
+
+    article = rng.normal(size=384)
+
+    results = predict_event_matches(
+        article_embedding=article,
+        candidates=[
+            {
+                "event_id": 1,
+                "centroid_embedding": article,
+                "temporal_score": 1.0
+            },
+            {
+                "event_id": 2,
+                "centroid_embedding": rng.normal(size=384),
+                "temporal_score": 0.4
+            }
+        ]
     )
 
     print("\n========================================")
-    print("EVENT MATCH PREDICTION")
+    print("ARTICLE-vs-EVENT MATCH PREDICTION")
     print("========================================")
 
-    print(
-        f"Probability: {result['probability']:.4f}"
-    )
-
-    print(
-        f"Prediction : {result['prediction']}"
-    )
-
-    print(
-        f"Similarity : {result['features']['similarity']:.4f}"
-    )
-
-    print(
-        f"Temporal   : {result['features']['temporal_score']:.4f}"
-    )
+    for result in results:
+        print(result)

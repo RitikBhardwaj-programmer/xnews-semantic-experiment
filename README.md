@@ -80,36 +80,34 @@ F1:
 
 ### POST /predict
 
-Determines whether two news articles describe the same real-world event.
+Scores one new article against a list of candidate **event centroids** in a
+single call and returns a same-event probability for each. Requires an
+`X-API-Key` header.
 
 #### Request
 
 ```json
 {
-  "article_a_text": "NovaTech announced its new AI processor in San Francisco.",
-  "article_b_text": "NovaTech unveiled a new processor designed for AI applications in San Francisco.",
-  "entities_a": "NovaTech;AI processor",
-  "entities_b": "NovaTech;processor",
-  "date_a": "2026-08-10",
-  "date_b": "2026-08-10",
-  "location_a": "San Francisco",
-  "location_b": "San Francisco"
+  "article_embedding": [0.01, "... 384 floats ..."],
+  "candidates": [
+    { "event_id": 12, "centroid_embedding": ["... 384 floats ..."], "temporal_score": 0.9 },
+    { "event_id": 42, "centroid_embedding": ["... 384 floats ..."], "temporal_score": 0.4 }
+  ]
 }
 ```
+
+Similarity is computed server-side (cosine) from the two embeddings.
 
 #### Response
 ```json
 {
-  "probability": 0.9840580487944166,
-  "prediction": "SAME_EVENT",
-  "features": {
-    "similarity": 0.944098711013794,
-    "entity_score": 0.3333333333333333,
-    "temporal_score": 1,
-    "location_score": 1
-  }
+  "results": [
+    { "event_id": 12, "probability": 0.91, "similarity": 0.83 },
+    { "event_id": 42, "probability": 0.37, "similarity": 0.61 }
+  ]
 }
 ```
+
 ### GET /health
 
 Returns:
