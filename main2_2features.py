@@ -335,7 +335,10 @@ from pathlib import Path
 MODEL_DIR = Path("models")
 MODEL_DIR.mkdir(exist_ok=True)
 
-MODEL_PATH = MODEL_DIR / "event_matcher.pkl"
+# The deployed model comes from evaluate_centroid_matching.py, which trains
+# on article-vs-event-centroid rows. This pair-trained experiment must not
+# overwrite it.
+MODEL_PATH = MODEL_DIR / "event_matcher_pairs.pkl"
 
 joblib.dump(
     classifier,
@@ -344,7 +347,7 @@ joblib.dump(
 
 # Record which training run produced this .pkl - without this, a deployed
 # model file has no traceable path back to the data/code that produced it.
-METADATA_PATH = MODEL_DIR / "event_matcher.meta.json"
+METADATA_PATH = MODEL_DIR / "event_matcher_pairs.meta.json"
 
 with open(METADATA_PATH, "w") as metadata_file:
 
