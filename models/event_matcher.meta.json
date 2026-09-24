@@ -1,0 +1,15 @@
+{
+  "trained_at": "2026-09-24T08:20:24.723171",
+  "source_file": "evaluate_centroid_matching.py",
+  "trained_on": "article-vs-event-centroid rows, label events, 10-day window, top 30 candidates",
+  "features": [
+    "similarity",
+    "temporal_score"
+  ],
+  "training_rows": 22760,
+  "attach_cases": 414,
+  "recommended_threshold": 0.94,
+  "cross_validated_precision": 0.749,
+  "cross_validated_recall": 0.886,
+  "cross_validated_f1": 0.812
+}
