@@ -90,6 +90,15 @@ word, follow-ups months apart, a few identical texts in different events), so
 real-traffic precision is unmeasured. Run `python evaluate_centroid_matching.py`
 for the full comparison.
 
+A separate replay of 670 real articles (four Indian outlets, one week) through
+the same centroid pipeline showed the difference on real traffic. With the
+original pair-trained model at 0.70, the largest event held 121 articles (all
+of that week's cricket coverage). With the current model at 0.94 the largest
+held 18, all one story, and about 11 of 12 randomly sampled merges were
+clearly the same story. There are no labels for that data, and a few
+cross-outlet stories about the same event still stay split, which is the cost
+of a precision-leaning threshold.
+
 ## API
 
 ### POST /predict
