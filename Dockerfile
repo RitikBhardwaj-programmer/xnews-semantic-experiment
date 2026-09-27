@@ -1,10 +1,13 @@
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt
+# CPU-only torch first: the default Linux wheel bundles several GB of CUDA
+# libraries that a CPU-only container never uses.
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
 COPY predict.py .
