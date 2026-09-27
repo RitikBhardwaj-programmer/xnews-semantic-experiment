@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  service:
+    runs-on: ubuntu-latest
+    env:
+      # Dummy key: CI never gets real credentials.
+      AI_SERVICE_API_KEY: ci-dummy-key
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install dependencies (CPU-only torch)
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-all-MiniLM-L6-v2
+
+      - name: Start service
+        run: |
+          uvicorn app:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
+          for i in $(seq 1 120); do
+            curl -sf http://127.0.0.1:8000/health && exit 0
+            sleep 2
+          done
+          cat uvicorn.log
+          exit 1
+
+      - name: Smoke test
+        run: python smoke_test.py http://127.0.0.1:8000
+
+      - name: Service log
+        if: failure()
+        run: cat uvicorn.log
+
+      - name: Docker image builds
+        run: docker build -t xnews-ai:ci .
