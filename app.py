@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from sentence_transformers import SentenceTransformer
 
+from entity_extraction import mentions as extract_mentions
 from matcher_v2 import MEMBER_TEXT_CAP, load_matcher
 from predict import predict_event_matches
 from datetime import datetime
@@ -243,6 +244,23 @@ def refit_vocabulary_v2(request: VocabularyRequest):
     return {
         "vocabulary_version": version,
         "documents": len(items)
+    }
+
+# ============================================================
+# ENTITY MENTIONS (V4 roadmap step 3)
+# ============================================================
+# Rule-based people/places/organisations/teams in one article; the backend
+# stores them and resolves aliases. Bump the version when the rules change.
+
+ENTITY_EXTRACTOR_VERSION = "rules-2026-10-02"
+
+
+@app.post("/entities", dependencies=[Depends(require_api_key)])
+def entities(request: ArticleText):
+
+    return {
+        "extractor_version": ENTITY_EXTRACTOR_VERSION,
+        "mentions": extract_mentions(request.title, request.description)
     }
 
 # ============================================================

@@ -303,6 +303,21 @@ Refits the TF-IDF vocabulary used by `/predict/v2`. It needs an `X-API-Key` head
 
 Train the model with `python train_event_matcher_v2.py`, which needs the local descriptions. Each day's training rows use a vocabulary fitted on the other days, matching the nightly refit; see stage 1b step 0. `python test_predict_v2.py` checks that the service reproduces the offline features and probabilities to 1e-9.
 
+### POST /entities
+
+Entity mentions in one article, for the information layer (V4 roadmap step 3). It needs an `X-API-Key` header. The request is `{"title": "...", "description": "..."}`, with the same limits as `ArticleText`.
+
+The response is `{"extractor_version": "rules-2026-10-02", "mentions": [{"text": "Mulla Afroz", "normalized": "mulla afroz", "type": "name", "field": "title"}]}`. There is one mention per entity and field. `type` is `team` (from the gazetteer in `event_features.py`) or `name` (a capitalised run: a person, place or organisation). The backend stores the mentions and resolves aliases.
+
+`entity_extraction.py` uses rules on purpose, so there is no new dependency:
+- names never run across punctuation
+- title-case headlines are skipped, so only their description is used
+- format words, weekdays and months are dropped
+- names are at most 5 words long
+- a team at the start of a longer name ("India Meteorological Department") is not a team
+
+On the 2,455 labelled articles it finds 3.2 entities per article on average (187 articles have none). Expect some noise: demonyms ("Indian") and job titles kept with names ("captain Smit Machchhar"). `python test_entity_extraction.py` checks it.
+
 ### GET /health
 
 Returns:
