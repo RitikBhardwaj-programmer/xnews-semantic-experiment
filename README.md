@@ -233,6 +233,21 @@ Scoring is within each day, because the labels are per day. "Mixed" counts predi
   - Production already closes events after 10 days of inactivity.
 - **Caveats:** three model-labelled days; per-day labels can't reward correct cross-day continuation, which works against the merge pass and the cap alike.
 
+## Stage 3: other 384-dimension embedders (offline, MiniLM kept)
+
+`python evaluate_stage3.py` (about 10 minutes, the first time including downloads) re-embeds the 2,455 labelled articles with two same-size drop-ins. They embed the same text production does (title, newline, description) and go through the shipped v2 setup with the same folds. MiniLM uses the embeddings production stored. Embeddings are cached in `eval_days/local/`.
+
+| Embedder (pooled) | B-cubed F1 | Pairwise P | Pairwise R | Pairwise F1 | Mixed |
+|---|---|---|---|---|---|
+| all-MiniLM-L6-v2 (production) | 0.920 | 0.821 | 0.794 | 0.807 | 81 |
+| BAAI/bge-small-en-v1.5 | 0.918 | 0.856 | 0.712 | 0.778 | 82 |
+| thenlper/gte-small | 0.925 | 0.895 | 0.758 | 0.821 | 76 |
+
+**Decision, by the criterion fixed before the run** (pairwise F1 gain with a 95% interval above 0, B-cubed not worse, mixed not more): **keep MiniLM.**
+- bge-small loses recall: pairwise difference −0.141 to +0.043.
+- gte-small is promising: precision 0.821 → 0.895, 5 fewer mixed events. But its pairwise gain isn't significant (−0.033 to +0.061), and switching would mean re-embedding every production article.
+- Fine-tuning is deferred. There's no clear winner, the only labels are three model-made days, and three days can't show a significant gain. Revisit with more labelled data, for example the labelled shadow disagreements.
+
 ## API
 
 ### POST /predict
