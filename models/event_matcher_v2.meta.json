@@ -1,6 +1,6 @@
 {
-  "version": "v2-b-2026-10-02",
-  "trained_at": "2026-10-02T06:50:24Z",
+  "version": "v2-b-notemporal-2026-10-02",
+  "trained_at": "2026-10-02T07:20:05Z",
   "source_file": "train_event_matcher_v2.py",
   "variant": "B +lexical",
   "trained_on": "oracle replay of labelled days 2026-09-29, 2026-09-30, 2026-10-01 (model-made labels), each day's TF-IDF fitted on the other days, member text cap 20",
@@ -10,7 +10,6 @@
   "attach_rows": 821,
   "features": [
     "similarity",
-    "temporal_score",
     "member_max",
     "member_min",
     "member_top3",
@@ -19,21 +18,20 @@
     "text_tfidf_max"
   ],
   "coefficients": {
-    "similarity": 2.361,
-    "temporal_score": -0.347,
-    "member_max": 0.305,
-    "member_min": -0.357,
-    "member_top3": -0.76,
-    "member_newest": 0.261,
-    "title_tfidf_max": 0.288,
-    "text_tfidf_max": 0.9
+    "similarity": 2.225,
+    "member_max": 0.357,
+    "member_min": -0.3,
+    "member_top3": -0.711,
+    "member_newest": 0.219,
+    "title_tfidf_max": 0.304,
+    "text_tfidf_max": 0.871
   },
-  "threshold": 0.98,
+  "threshold": 0.99,
   "default_vocabulary": {
     "documents": 2455,
     "title_terms": 23862,
     "text_terms": 11236
   },
-  "offline_evaluation": "README.md, Stage 1b step 0: nightly refit + cap 20, leave-one-day-out, pooled pairwise P 0.804 / R 0.796 / F1 0.800 vs production rule F1 0.667",
+  "offline_evaluation": "README.md, Stage 1b step 0: nightly refit + cap 20, leave-one-day-out, no temporal: pooled pairwise P 0.821 / R 0.794 / F1 0.807 vs production rule F1 0.667",
   "scikit_learn": "1.9.1"
 }

@@ -275,7 +275,18 @@ def refit_index(frames, day, context_days, member_cap, hourly):
     return RefitIndex(f.assign(title=f["stripped"]), matrices, codes, member_cap)
 
 
-REFIT_LABELS = ("replay@0.94", "B as in stage 1", "B nightly refit + cap 20", "B hourly refit + cap 20")
+REFIT_LABELS = ("replay@0.94", "B as in stage 1", "B nightly refit + cap 20", "B hourly refit + cap 20",
+                "B nightly refit + cap 20, no temporal")
+
+# temporal_score is 1.0 or 0.9 in every training row (the labelled days are
+# consecutive and each replay starts empty), so the model can't learn it and
+# extrapolates to near-certain matches below 0.9, which production sees for
+# events that are several days old. The shipped v2 model leaves it out.
+SHIPPED_EXCLUDED = ["temporal_score"]
+
+
+def shipped_columns():
+    return [c for c in columns_for(VARIANTS[1][1]) if c not in SHIPPED_EXCLUDED]
 
 
 def refit_fold(frames, label, test):
@@ -283,7 +294,7 @@ def refit_fold(frames, label, test):
     if label == "replay@0.94":
         return production_replay(frames[test]), None
     name, groups, veto, gate, kind, _ = VARIANTS[1]
-    columns = columns_for(groups)
+    columns = shipped_columns() if label.endswith("no temporal") else columns_for(groups)
     train_days = [d for d in range(len(DAYS)) if d != test]
     if label == "B as in stage 1":
         shared = build_indexes(frames)
@@ -318,7 +329,7 @@ def refit_checks():
     with pd.option_context("display.width", 200, "display.float_format", lambda x: f"{x:.3f}"):
         print(table[["bcubed_f1", "pair_p", "pair_r", "pair_f1", "events_pred", "largest_pred"]].to_string())
     reference = table.loc["B as in stage 1"]
-    for label in ("B nightly refit + cap 20", "B hourly refit + cap 20"):
+    for label in REFIT_LABELS[2:]:
         f1 = table.loc[label, "pair_f1"] - reference["pair_f1"]
         precision = table.loc[label, "pair_p"] - reference["pair_p"]
         verdict = "RECOVERS" if f1 >= -0.02 and precision >= -0.03 else "DOES NOT RECOVER"
