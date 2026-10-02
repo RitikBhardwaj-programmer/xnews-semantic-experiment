@@ -3,7 +3,7 @@ Checks cluster_metrics against small hand-computed cases.
 Run: python test_cluster_metrics.py
 """
 
-from cluster_metrics import bcubed, bootstrap_bcubed, ceaf_e, pairwise, summary
+from cluster_metrics import bcubed, bootstrap_bcubed, bootstrap_pairwise, ceaf_e, pair_components, pairwise, summary
 
 TRUE = ["a", "a", "a", "b", "b", "c"]
 
@@ -60,6 +60,20 @@ def test_bootstrap_identical_systems_have_zero_difference():
     result = bootstrap_bcubed(TRUE, {"x": TRUE, "y": TRUE}, n=50)
     assert result["diff"][("x", "y")] == (0.0, 0.0)
     assert result["f1"]["x"] == (1.0, 1.0)
+
+
+def test_pair_components_add_up_to_pairwise_counts():
+    pred = [0, 0, 0, 0, 0, 1]                  # true b merged into a
+    tp, fn, fp = pair_components(TRUE, pred)
+    assert tp.sum() == 4 and fn.sum() == 0     # a: 3 pairs, b: 1 pair, all kept together
+    assert fp.sum() == 6                       # 3 x 2 a-b pairs wrongly together
+    p, r, _ = pairwise(TRUE, pred)
+    assert close(p, tp.sum() / (tp.sum() + fp.sum())) and close(r, 1.0)
+
+
+def test_bootstrap_pairwise_identical_systems():
+    result = bootstrap_pairwise(TRUE, {"x": [0, 0, 0, 1, 1, 2], "y": [0, 0, 0, 1, 1, 2]}, n=50)
+    assert result["diff"][("x", "y")] == (0.0, 0.0)
 
 
 if __name__ == "__main__":

@@ -134,6 +134,40 @@ Per day, production's B-cubed F1 was 0.910, 0.873 and 0.874.
 - **B-cubed is generous here.** About 60% of true events are single articles, which are easy to get right, so pairwise and CEAF-e are the stricter views.
 - **Who labelled them:** all three days were labelled by Claude at the user's request, not by a person (`labels_<day>.meta.json`). Treat the labels as provisional until a human spot-check. On 1 Oct, the 68-article flydubai event carries one note on all its rows, which inflates that day's note count.
 
+## Stage 1: event-evidence matcher (offline)
+
+`python evaluate_stage1.py` (about 17 minutes) adds evidence to the attach decision (`event_features.py`):
+- **member similarities:** max, min, top-3 and newest member
+- **TF-IDF wording:** cosine of template-stripped titles, and of title+description
+- **entities and numbers**
+- **a cricket fixture signature**, used as a veto
+- **time and size**
+
+It tests these with **leave-one-day-out**: train on two labelled days (oracle replay), choose the threshold on those days only, then replay the third day free-running. TF-IDF is fitted on all three days' text; no labels are used.
+
+| Variant (pooled, 3 held-out days) | B-cubed F1 | Pairwise P | Pairwise R | Pairwise F1 | Mixed events | 2nd ODI split into |
+|---|---|---|---|---|---|---|
+| replay@0.94 (production rule) | 0.901 | 0.773 | 0.586 | 0.667 | 90 | 6 |
+| production rule + hard member gate ≥ 0.45 | 0.898 | 0.882 | 0.443 | 0.590 | 89 | 12 |
+| A: + member similarities | 0.902 | 0.649 | 0.641 | 0.645 | 60 | 6 |
+| **B: A + TF-IDF wording** | **0.917** | **0.814** | **0.754** | **0.783** | **90** | **5** |
+| C: B + entities, numbers | 0.914 | 0.757 | 0.790 | 0.773 | 89 | 3 |
+| D: C + fixture veto | 0.910 | 0.809 | 0.726 | 0.765 | 89 | 5 |
+| E: D + time, size (all features) | 0.913 | 0.816 | 0.674 | 0.738 | 74 | 6 |
+| F: E, re-embedding stripped titles | 0.915 | 0.851 | 0.669 | 0.749 | 71 | 6 |
+| G: E with gradient boosting | 0.913 | 0.851 | 0.671 | 0.750 | 66 | 6 |
+| H: E + hard member gate | 0.902 | 0.911 | 0.415 | 0.570 | 69 | 15 |
+
+**Decision, by the criteria fixed before the run:** pairwise F1 gain with a 95% interval above 0, B-cubed F1 not worse, mixed events not more, and the 2nd ODI coverage split less. **B passes:** pairwise F1 +0.116, interval +0.045 to +0.181; B-cubed F1 +0.016, interval +0.005 to +0.030. D also passes, so the simpler B is chosen.
+
+- **Wording is the big win.** TF-IDF on stripped titles and descriptions joins coverage of one story that the embedding alone keeps apart. On 30 Sep, pairwise recall rose from 0.48 to 0.67.
+- **The hard member gate is rejected.** It raises precision but splits coverage badly. On 30 Sep the 2nd ODI ended up in 12–15 events, and pairwise recall fell to 0.22.
+- **E, F and G give fewer mixed events (66–74 vs 90)** but fail the split criterion by a tie (6 vs 6). They are worth revisiting if over-merging matters more than splitting.
+- **The fixture veto helps exactly where expected:** on 1 Oct, pairwise precision rose from 0.868 to 0.930 (C → D).
+- **Caveats:**
+  - **Uneven across days:** B helps mostly on 30 Sep and 1 Oct. On 29 Sep its pairwise F1 matches the baseline (0.657 vs 0.660), and it puts 10% more articles into mixed events.
+  - **Small, model-labelled data:** three days, labelled by a model. The pairwise intervals are wide, because a few large events dominate pair counts.
+
 ## API
 
 ### POST /predict

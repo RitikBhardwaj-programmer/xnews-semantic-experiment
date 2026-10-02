@@ -108,6 +108,45 @@ def summary(true, pred):
     }
 
 
+def pair_components(true, pred):
+    """Per TRUE event: same-event pairs kept together (tp), split apart (fn),
+    and wrong pairs it takes part in (fp, half of each cross-event pair)."""
+
+    t, p = _codes(true), _codes(pred)
+    joint = pd.crosstab(t, p).to_numpy()
+    true_sizes = joint.sum(axis=1)
+    pred_sizes = joint.sum(axis=0)
+    tp = (joint * (joint - 1) / 2).sum(axis=1)
+    fn = true_sizes * (true_sizes - 1) / 2 - tp
+    # pairs that share a predicted event but not a true event, split between the two events
+    fp = (joint * (pred_sizes - joint)).sum(axis=1) / 2
+    return tp, fn, fp
+
+
+def bootstrap_pairwise(true, preds, n=1000, seed=7):
+    """Cluster bootstrap of pairwise F1 (resampling true events), paired across systems."""
+
+    components = {name: pair_components(true, pred) for name, pred in preds.items()}
+    events = len(next(iter(components.values()))[0])
+    rng = np.random.default_rng(seed)
+    scores = {name: np.empty(n) for name in preds}
+
+    for k in range(n):
+        idx = rng.integers(0, events, events)
+        for name, (tp, fn, fp) in components.items():
+            t, f_n, f_p = tp[idx].sum(), fn[idx].sum(), fp[idx].sum()
+            precision = t / (t + f_p) if t + f_p else 1.0
+            recall = t / (t + f_n) if t + f_n else 1.0
+            scores[name][k] = f1(precision, recall)
+
+    interval = lambda x: (float(np.percentile(x, 2.5)), float(np.percentile(x, 97.5)))
+    names = list(preds)
+    return {
+        "f1": {name: interval(scores[name]) for name in names},
+        "diff": {(a, b): interval(scores[a] - scores[b]) for i, a in enumerate(names) for b in names[i + 1:]},
+    }
+
+
 def bootstrap_bcubed(true, preds, groups=None, n=1000, seed=7):
     """Cluster bootstrap of B-cubed F1.
 
