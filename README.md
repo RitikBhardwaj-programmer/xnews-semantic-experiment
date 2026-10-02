@@ -221,6 +221,45 @@ Similarity is computed server-side (cosine) from the two embeddings.
 }
 ```
 
+### POST /predict/v2
+
+The variant B matcher (stage 1b), alongside `/predict` (which is unchanged). It needs an `X-API-Key` header. The backend computes the centroid similarity and the member similarities in SQL over all members, and sends the texts of up to 20 newest members, newest first. The service adds the TF-IDF wording features (`event_features.py`, the same code as offline) and scores with `models/event_matcher_v2.joblib`. The attach decision (best probability ≥ `threshold`) stays in the backend.
+
+#### Request
+```json
+{
+  "title": "IND vs WI, 2nd ODI LIVE score: Kohli in action",
+  "description": "India look to seal the series ...",
+  "candidates": [
+    { "event_id": 12, "similarity": 0.91, "temporal_score": 1.0,
+      "member_max": 0.93, "member_min": 0.71, "member_top3": 0.9, "member_newest": 0.88,
+      "members": [ { "title": "India vs West Indies second ODI ...", "description": "..." } ] }
+  ]
+}
+```
+
+Limits (422 otherwise): at most 30 candidates; 1–20 members per candidate; titles of 1–500 characters; descriptions of at most 5,000 characters; similarities in [−1, 1]; `temporal_score` in [0, 1].
+
+#### Response
+```json
+{
+  "model_version": "v2-b-2026-10-02",
+  "vocabulary_version": "2026-10-03T02:00:04Z/11480",
+  "threshold": 0.98,
+  "results": [
+    { "event_id": 12, "probability": 0.993, "features": { "similarity": 0.91, "...": "8 values" } }
+  ]
+}
+```
+
+`vocabulary_version` is `"default"` until the first refit after the service starts.
+
+### POST /vocabulary/v2
+
+Refits the TF-IDF vocabulary used by `/predict/v2`. It needs an `X-API-Key` header. The backend sends the title and description of recent articles nightly (the last 14 days), and again whenever `/predict/v2` reports `"default"`. The request body is `{"items": [{"title": "...", "description": "..."}]}`, with 100–20,000 items. The response is `{"vocabulary_version": "...", "documents": n}`. The new vocabulary is swapped in as a whole, and if fitting fails (422) the old one stays. It is kept in memory only, so after a restart the shipped default vocabulary is used. At 12,000 items (3 MB) a refit takes about 1.5 s locally.
+
+Train the model with `python train_event_matcher_v2.py`, which needs the local descriptions. Each day's training rows use a vocabulary fitted on the other days, matching the nightly refit; see stage 1b step 0. `python test_predict_v2.py` checks that the service reproduces the offline features and probabilities to 1e-9.
+
 ### GET /health
 
 Returns:

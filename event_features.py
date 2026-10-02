@@ -14,6 +14,7 @@ import re
 from datetime import timedelta
 
 import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 # ------------------------------------------------------------
 # TEMPLATE STRIPPING
@@ -38,6 +39,21 @@ def strip_templates(title):
     stripped = _TEMPLATE_RE.sub(" ", title)
     stripped = re.sub(r"[\s:;,–—-]+$", "", re.sub(r"\s+", " ", stripped)).strip(" :;,–—-")
     return stripped if len(stripped.split()) >= 3 else title
+
+
+# ------------------------------------------------------------
+# TF-IDF WORDING (shared by evaluation, training and the service)
+# ------------------------------------------------------------
+
+def new_vectorizers():
+    """(title, text) vectorisers: bigram TF-IDF on stripped titles, unigram on stripped title + description."""
+    return (TfidfVectorizer(sublinear_tf=True, min_df=1, ngram_range=(1, 2), stop_words="english"),
+            TfidfVectorizer(sublinear_tf=True, min_df=1, stop_words="english"))
+
+
+def tfidf_text(stripped_title, description):
+    """The text the text vectoriser sees: stripped title + description."""
+    return stripped_title + " " + (description or "")
 
 
 # ------------------------------------------------------------

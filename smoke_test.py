@@ -1,7 +1,9 @@
 """Smoke test for a running AI service.
 
-Checks health, API-key protection, /embed and /predict end to end, so a
-broken model file, dependency or endpoint fails CI instead of production.
+Checks health, API-key protection, /embed, /predict, /predict/v2 and
+/vocabulary/v2 end to end, so a broken model file, dependency or endpoint
+fails CI instead of production. It refits the v2 vocabulary, so run it only
+against a local or CI container, never the deployed service.
 
 Usage (server already running):
     AI_SERVICE_API_KEY=... python smoke_test.py [base_url]
@@ -75,4 +77,54 @@ check(set(scores) == {1, 2}, "/predict scores every candidate")
 check(all(0 <= p <= 1 for p in scores.values()), "probabilities are within [0, 1]")
 check(scores[1] > scores[2], "the same story scores higher than an unrelated one")
 
-print(f"PASS (same={scores[1]:.3f}, unrelated={scores[2]:.3f})")
+v1_scores = scores
+
+
+# ------------------------------------------------------------
+# /predict/v2 and /vocabulary/v2
+# ------------------------------------------------------------
+
+def v2_candidate(event_id, members, similarity):
+    return {"event_id": event_id, "similarity": similarity, "temporal_score": 1.0,
+            "member_max": similarity, "member_min": similarity, "member_top3": similarity,
+            "member_newest": similarity, "members": members}
+
+
+same_members = [{"title": "Jaiswal hits a hundred, India on top in second Test", "description": None}]
+other_members = [{"title": OTHER_STORY, "description": "Air traffic disrupted across Europe."}]
+v2_request = {
+    "title": SAME_STORY,
+    "description": "India batted all day.",
+    "candidates": [v2_candidate(1, same_members, 0.95), v2_candidate(2, other_members, 0.1)],
+}
+
+status, _ = call("POST", "/predict/v2", v2_request, api_key="wrong-key")
+check(status == 401, "/predict/v2 rejects a wrong API key with 401")
+
+status, body = call("POST", "/predict/v2", v2_request)
+check(status == 200, "/predict/v2 returns 200")
+check(body["vocabulary_version"] == "default", "/predict/v2 starts with the shipped vocabulary")
+check(body["model_version"].startswith("v2") and 0 < body["threshold"] < 1, "/predict/v2 reports model and threshold")
+v2_scores = {result["event_id"]: result["probability"] for result in body["results"]}
+check(set(v2_scores) == {1, 2}, "/predict/v2 scores every candidate")
+check(v2_scores[1] > v2_scores[2], "/predict/v2: the same story scores higher than an unrelated one")
+check(len(body["results"][0]["features"]) == 8, "/predict/v2 returns the 8 feature values")
+
+status, _ = call("POST", "/predict/v2", dict(v2_request, candidates=[v2_request["candidates"][0]] * 31))
+check(status == 422, "/predict/v2 rejects more than 30 candidates")
+status, _ = call("POST", "/predict/v2", dict(v2_request, candidates=[v2_candidate(1, same_members * 21, 0.9)]))
+check(status == 422, "/predict/v2 rejects more than 20 members")
+status, _ = call("POST", "/predict/v2", dict(v2_request, candidates=[v2_candidate(1, [], 0.9)]))
+check(status == 422, "/predict/v2 rejects a candidate without members")
+
+items = [{"title": f"Story number {i} about the {word} today", "description": None}
+         for i, word in enumerate(["cricket", "monsoon", "election", "volcano", "market"] * 24)]
+status, _ = call("POST", "/vocabulary/v2", {"items": items[:10]})
+check(status == 422, "/vocabulary/v2 rejects fewer than 100 items")
+status, body = call("POST", "/vocabulary/v2", {"items": items})
+check(status == 200 and body["documents"] == 120, "/vocabulary/v2 refits on 120 items")
+status, after = call("POST", "/predict/v2", v2_request)
+check(status == 200 and after["vocabulary_version"] == body["vocabulary_version"], "/predict/v2 uses the refitted vocabulary")
+
+print(f"PASS (v1 same={v1_scores[1]:.3f}, unrelated={v1_scores[2]:.3f}; "
+      f"v2 same={v2_scores[1]:.3f}, unrelated={v2_scores[2]:.3f})")

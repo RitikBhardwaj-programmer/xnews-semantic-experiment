@@ -30,13 +30,12 @@ import numpy as np
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import HistGradientBoostingClassifier
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from cluster_metrics import bootstrap_bcubed, bootstrap_pairwise, summary
-from event_features import FEATURE_GROUPS, ArticleIndex, strip_templates
+from event_features import FEATURE_GROUPS, ArticleIndex, new_vectorizers, strip_templates
 from replay import THRESHOLD, load_day, production_replay, replay
 
 BASE = Path(__file__).parent / "data" / "validation" / "eval_days"
@@ -80,8 +79,7 @@ def stripped_embeddings(frames):
 def build_indexes(frames, fit_frames=None, member_cap=None):
     """TF-IDF fitted on `fit_frames` (default: all days; no labels used), then one
     ArticleIndex per day. `member_cap` limits the member texts used for TF-IDF."""
-    titles = TfidfVectorizer(sublinear_tf=True, min_df=1, ngram_range=(1, 2), stop_words="english")
-    texts = TfidfVectorizer(sublinear_tf=True, min_df=1, stop_words="english")
+    titles, texts = new_vectorizers()
     allf = pd.concat(fit_frames or frames)
     titles.fit(allf["stripped"])
     texts.fit(allf["stripped"] + " " + allf["description"].fillna(""))
@@ -269,8 +267,7 @@ def refit_index(frames, day, context_days, member_cap, hourly):
     matrices = {}
     for code, start in enumerate(starts):
         seen = pd.concat([context, f[f["created_at"] < start]]) if hourly else context
-        titles = TfidfVectorizer(sublinear_tf=True, min_df=1, ngram_range=(1, 2), stop_words="english")
-        texts = TfidfVectorizer(sublinear_tf=True, min_df=1, stop_words="english")
+        titles, texts = new_vectorizers()
         titles.fit(seen["stripped"])
         texts.fit(seen["stripped"] + " " + seen["description"].fillna(""))
         matrices[code] = (titles.transform(f["stripped"]),

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from sentence_transformers import SentenceTransformer
 
+from matcher_v2 import MEMBER_TEXT_CAP, load_matcher
 from predict import predict_event_matches
 from datetime import datetime
 import numpy as np
@@ -163,6 +164,85 @@ def predict(request: EventMatchRequest):
                 for candidate in request.candidates
             ]
         )
+    }
+
+# ============================================================
+# EVENT MATCH V2 (variant B, stage 1b)
+# ============================================================
+# The backend computes the centroid and member similarities in SQL and
+# sends the newest members' texts; the service adds the TF-IDF wording
+# features and scores. The attach decision (best probability >= threshold)
+# stays in the backend.
+
+event_matcher_v2 = load_matcher()
+
+MAX_CANDIDATES = 30
+MAX_TITLE_CHARS = 500
+MAX_DESCRIPTION_CHARS = 5000
+MIN_VOCABULARY_ITEMS = 100
+MAX_VOCABULARY_ITEMS = 20000
+
+
+class ArticleText(BaseModel):
+
+    title: str = Field(min_length=1, max_length=MAX_TITLE_CHARS)
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_CHARS)
+
+
+class EventCandidateV2(BaseModel):
+
+    event_id: int
+    similarity: float = Field(ge=-1, le=1)
+    temporal_score: float = Field(ge=0, le=1)
+    member_max: float = Field(ge=-1, le=1)
+    member_min: float = Field(ge=-1, le=1)
+    member_top3: float = Field(ge=-1, le=1)
+    member_newest: float = Field(ge=-1, le=1)
+    members: list[ArticleText] = Field(min_length=1, max_length=MEMBER_TEXT_CAP)
+
+
+class EventMatchRequestV2(BaseModel):
+
+    title: str = Field(min_length=1, max_length=MAX_TITLE_CHARS)
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_CHARS)
+    candidates: list[EventCandidateV2] = Field(max_length=MAX_CANDIDATES)
+
+
+@app.post("/predict/v2", dependencies=[Depends(require_api_key)])
+def predict_v2(request: EventMatchRequestV2):
+
+    return event_matcher_v2.predict(
+        title=request.title,
+        description=request.description,
+        candidates=[
+            candidate.model_dump()
+            for candidate in request.candidates
+        ]
+    )
+
+
+class VocabularyRequest(BaseModel):
+
+    items: list[ArticleText] = Field(
+        min_length=MIN_VOCABULARY_ITEMS,
+        max_length=MAX_VOCABULARY_ITEMS
+    )
+
+
+@app.post("/vocabulary/v2", dependencies=[Depends(require_api_key)])
+def refit_vocabulary_v2(request: VocabularyRequest):
+
+    items = [item.model_dump() for item in request.items]
+
+    try:
+        version = event_matcher_v2.refit(items)
+    except ValueError as error:
+        # e.g. only stop words: keep the current vocabulary
+        raise HTTPException(status_code=422, detail=f"Vocabulary not refitted: {error}")
+
+    return {
+        "vocabulary_version": version,
+        "documents": len(items)
     }
 
 # ============================================================

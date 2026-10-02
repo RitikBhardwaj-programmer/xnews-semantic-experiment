@@ -12,6 +12,8 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 COPY app.py .
 COPY predict.py .
 COPY feature_extractor.py .
+COPY event_features.py .
+COPY matcher_v2.py .
 COPY models ./models
 
 EXPOSE 8000
