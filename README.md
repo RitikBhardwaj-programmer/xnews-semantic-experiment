@@ -116,18 +116,23 @@ Run these with the project virtual environment (`.venv`).
 
 Sanity check: replaying each day reproduces production's event counts within about 3% (agreement ARI 0.55–0.86). It can't be exact, because production also attaches to events from before the day and processes 3 Kafka partitions in parallel.
 
-### Baseline: 29 Sep 2026 (812 articles, 556 true events)
+### Baseline: 29 Sep – 1 Oct 2026 (2,455 articles, 1,632 true events)
 
-| System | B-cubed P | B-cubed R | B-cubed F1 | Pairwise P | Pairwise R | CEAF-e F1 | Largest event |
+Pooled over the three labelled days (`python evaluate_baseline.py --days 2026-09-29 2026-09-30 2026-10-01`):
+
+| System | B-cubed P | B-cubed R | B-cubed F1 | Pairwise P | Pairwise R | Pairwise F1 | CEAF-e F1 |
 |---|---|---|---|---|---|---|---|
-| Production (as it happened) | 0.923 | 0.897 | 0.910 | 0.711 | 0.613 | 0.894 | 10 |
-| Replay @ 0.94 | 0.930 | 0.905 | 0.917 | 0.680 | 0.641 | 0.900 | 17 |
-| Replay @ 0.96 (best B-cubed F1) | 0.953 | 0.895 | 0.923 | 0.720 | 0.607 | 0.911 | 15 |
+| Production (as it happened) | 0.908 | 0.865 | 0.886 | 0.838 | 0.515 | 0.638 | 0.880 |
+| Replay @ 0.94 (production rule) | 0.922 | 0.880 | 0.901 | 0.773 | 0.586 | 0.667 | 0.895 |
+| Replay @ 0.96 (best B-cubed F1) | 0.950 | 0.868 | 0.907 | 0.890 | 0.524 | 0.659 | 0.899 |
 
-- **The threshold alone isn't the fix.** No threshold from 0.90 to 0.99 beats 0.94 clearly: the 95% interval for every difference includes zero. Raising it trades recall for precision almost one for one.
-- **The errors go both ways, on the same topics.** In production, 31 events mix two or more real events (117 articles), and 41 real events are split across several production events (175 articles). The worst cases are the India vs West Indies ODIs, the Asian Games and the CEC/SIR political row. Separating events that share a topic needs evidence specific to each event (V4 approach 1), not a different cut-off.
-- **Pairwise scores are the stricter view.** B-cubed is inflated by the 451 single-article events, which are easy to get right. Pairwise precision of 0.71 means 29% of the article pairs production puts together are different events.
-- **Who labelled it:** day 1 was labelled by Claude at the user's request, not by a person (`labels_2026-09-29.meta.json` records the method). Treat it as provisional until a human spot-check.
+Per day, production's B-cubed F1 was 0.910, 0.873 and 0.874.
+
+- **Splitting is as big a problem as merging.** Pairwise recall of 0.515 means production put only half of the true same-event article pairs together. On 30 Sep, 52 articles about the 2nd ODI ended up in 15 production events, and 25 about the INDIA bloc meeting in 8. On 29 Sep, 31 production events mixed two or more real events. The same topics (cricket, the CEC/SIR row) cause both errors.
+- **The threshold alone isn't the fix.** Raising it to 0.96 buys precision with recall, and pairwise F1 barely moves (0.667 → 0.659). Separating and joining coverage correctly needs evidence specific to each event (V4 approach 1): teams and match number, names, time.
+- **Production scores below its own replay** (B-cubed F1 difference −0.019 to −0.008, 95% interval over days). This is **not an apples-to-apples comparison.** The replay starts each day with no events, while production also chooses among older, drifted events. Parallel processing in production explains little: only about one production event per large story started within two minutes of another. With three days, day-level intervals are rough.
+- **B-cubed is generous here.** About 60% of true events are single articles, which are easy to get right, so pairwise and CEAF-e are the stricter views.
+- **Who labelled them:** all three days were labelled by Claude at the user's request, not by a person (`labels_<day>.meta.json`). Treat the labels as provisional until a human spot-check. On 1 Oct, the 68-article flydubai event carries one note on all its rows, which inflates that day's note count.
 
 ## API
 
