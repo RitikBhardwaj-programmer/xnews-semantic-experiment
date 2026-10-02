@@ -105,6 +105,7 @@ The figures above come from an *oracle* replay: after every decision the article
 
 - `data/validation/eval_days/articles_<day>.csv`: every article collected on that UTC day (29 Sep – 1 Oct 2026), with its embedding and the production event it got. RSS descriptions stay local in `eval_days/local/` (git-ignored), because they are publishers' text.
 - `data/validation/EVENT_DEFINITION.md`: the labelling rules (one cricket match = one event; a series is a storyline).
+- `data/validation/EVALUATION_PRACTICE.md`: how to evaluate matcher and extractor changes (criteria set before the run, matching production conditions, feature-range checks, what the replay cannot show).
 - `python label_events.py --day <day>`: a local labelling page on http://localhost:8765. It saves to `labels_<day>.csv` and `events_<day>.csv` after every choice.
 - `python evaluate_baseline.py --days <day> [...]`: scores production's real grouping and a free-running replay of the matcher (`replay.py`, which keeps its own mistakes) at thresholds 0.90–0.99. It reports:
   - B-cubed, pairwise and CEAF-e precision, recall and F1, plus ARI
