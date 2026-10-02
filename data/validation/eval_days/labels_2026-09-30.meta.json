@@ -1,0 +1,10 @@
+{
+ "day": "2026-09-30",
+ "labeller": "Claude (claude-opus-5-5), at the user's request",
+ "date": "2026-10-02",
+ "method": "Read every article's outlet, time, title and RSS description, grouped into loose embedding-similarity blocks only to make reading manageable; every event decided by hand against EVENT_DEFINITION.md. Production event ids were not used. Second pass reviewed all 65 cross-event pairs with cosine >= 0.62.",
+ "articles": 851,
+ "events": 572,
+ "multi_article_events": 90,
+ "caveat": "Model-made labels, not human ground truth. Spot-check a sample before relying on small differences; notes mark uncertain decisions."
+}
