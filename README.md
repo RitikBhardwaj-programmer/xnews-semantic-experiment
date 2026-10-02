@@ -116,7 +116,18 @@ Run these with the project virtual environment (`.venv`).
 
 Sanity check: replaying each day reproduces production's event counts within about 3% (agreement ARI 0.55–0.86). It can't be exact, because production also attaches to events from before the day and processes 3 Kafka partitions in parallel.
 
-Baseline results: *pending the labelled days.*
+### Baseline: 29 Sep 2026 (812 articles, 556 true events)
+
+| System | B-cubed P | B-cubed R | B-cubed F1 | Pairwise P | Pairwise R | CEAF-e F1 | Largest event |
+|---|---|---|---|---|---|---|---|
+| Production (as it happened) | 0.923 | 0.897 | 0.910 | 0.711 | 0.613 | 0.894 | 10 |
+| Replay @ 0.94 | 0.930 | 0.905 | 0.917 | 0.680 | 0.641 | 0.900 | 17 |
+| Replay @ 0.96 (best B-cubed F1) | 0.953 | 0.895 | 0.923 | 0.720 | 0.607 | 0.911 | 15 |
+
+- **The threshold alone isn't the fix.** No threshold from 0.90 to 0.99 beats 0.94 clearly: the 95% interval for every difference includes zero. Raising it trades recall for precision almost one for one.
+- **The errors go both ways, on the same topics.** In production, 31 events mix two or more real events (117 articles), and 41 real events are split across several production events (175 articles). The worst cases are the India vs West Indies ODIs, the Asian Games and the CEC/SIR political row. Separating events that share a topic needs evidence specific to each event (V4 approach 1), not a different cut-off.
+- **Pairwise scores are the stricter view.** B-cubed is inflated by the 451 single-article events, which are easy to get right. Pairwise precision of 0.71 means 29% of the article pairs production puts together are different events.
+- **Who labelled it:** day 1 was labelled by Claude at the user's request, not by a person (`labels_2026-09-29.meta.json` records the method). Treat it as provisional until a human spot-check.
 
 ## API
 
