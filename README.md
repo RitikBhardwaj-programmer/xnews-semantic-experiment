@@ -182,11 +182,14 @@ Production can't see a day's words before it happens, and it sends only a bounde
 | frozen vocabulary + cap 20 | 0.896 | 0.721 | 0.836 | 0.774 | F1 pass, precision −0.093 |
 | **nightly refit + cap 20, consistent training** | **0.917** | **0.804** | **0.796** | **0.800** | **recovers** |
 | hourly refit + cap 20, consistent training | 0.917 | 0.820 | 0.732 | 0.773 | recovers |
+| **nightly refit + cap 20, no `temporal_score` (shipped)** | **0.920** | **0.821** | **0.794** | **0.807** | **recovers** |
 
 Pass rule: pairwise F1 within −0.02 of B. For a refit to count as recovering, pair precision must also stay within −0.03 of B; this rule was set before the refit run.
 
 - **The frozen-vocabulary failure is mostly a train/test mismatch.** In that check, training rows used a vocabulary that contained their own day's words, and the test day's did not. With *consistent training* (every day's rows use a vocabulary that excludes that day), precision comes back.
 - **Nightly is chosen over hourly.** It is better on F1 and simpler to run. The shipped matcher refits its vocabulary nightly on the previous 14 days.
+- **`temporal_score` is left out of the shipped model.** In every training row it is 1.0 or 0.9, because the labelled days are consecutive and each replay starts empty. The model therefore cannot learn it, and it gave a small negative weight that extrapolates to near-certain matches below 0.9. A local shadow run caught this: events several days old (temporal 0.4 or 0.1) were joined to unrelated articles with p ≈ 0.9999. Without the feature, the offline result is slightly better. The service still records the value with each decision.
+- **Not covered offline:** multi-day events. Each replay starts empty, so the shadow run on production traffic is the first test with events up to 10 days old.
 - **Caveat:** with only three days, each simulated vocabulary came from the neighbouring days, sometimes later ones. Labels are model-made.
 
 ## API
@@ -243,9 +246,9 @@ Limits (422 otherwise): at most 30 candidates; 1–20 members per candidate; tit
 #### Response
 ```json
 {
-  "model_version": "v2-b-2026-10-02",
+  "model_version": "v2-b-notemporal-2026-10-02",
   "vocabulary_version": "2026-10-03T02:00:04Z/11480",
-  "threshold": 0.98,
+  "threshold": 0.99,
   "results": [
     { "event_id": 12, "probability": 0.993, "features": { "similarity": 0.91, "...": "8 values" } }
   ]

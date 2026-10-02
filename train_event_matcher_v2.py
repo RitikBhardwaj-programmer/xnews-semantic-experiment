@@ -8,7 +8,8 @@ for /predict/v2.
   with a vocabulary refitted the night before, which never contains that
   day's own words. Stage 1b step 0 showed this is what keeps precision.
 - Model and threshold: the variant B logistic regression and threshold rule
-  from evaluate_stage1.py, fitted on all days' rows.
+  from evaluate_stage1.py, fitted on all days' rows, without temporal_score
+  (see evaluate_stage1.SHIPPED_EXCLUDED: the labelled days can't teach it).
 - Default vocabulary: fitted on all labelled days with the same code as
   POST /vocabulary/v2; used until the backend's first refit.
 
@@ -25,15 +26,15 @@ import joblib
 import pandas as pd
 import sklearn
 
-from evaluate_stage1 import DAYS, VARIANTS, choose_threshold, columns_for, fit, load, oracle_rows, refit_index
+from evaluate_stage1 import DAYS, VARIANTS, choose_threshold, fit, load, oracle_rows, refit_index, shipped_columns
 from matcher_v2 import MEMBER_TEXT_CAP, META_PATH, MODEL_PATH, fit_vocabulary
 
-VERSION = "v2-b-2026-10-02"
+VERSION = "v2-b-notemporal-2026-10-02"
 
 
 def main():
     name, groups, veto, gate, kind, _ = VARIANTS[1]
-    columns = columns_for(groups)
+    columns = shipped_columns()
     frames = [load(d) for d in DAYS]
     days = range(len(DAYS))
 
@@ -75,7 +76,7 @@ def main():
                                "title_terms": len(title_vectorizer.vocabulary_),
                                "text_terms": len(text_vectorizer.vocabulary_)},
         "offline_evaluation": "README.md, Stage 1b step 0: nightly refit + cap 20, leave-one-day-out, "
-                              "pooled pairwise P 0.804 / R 0.796 / F1 0.800 vs production rule F1 0.667",
+                              "no temporal: pooled pairwise P 0.821 / R 0.794 / F1 0.807 vs production rule F1 0.667",
         "scikit_learn": sklearn.__version__,
     }
     META_PATH.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")

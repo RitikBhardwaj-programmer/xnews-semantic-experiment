@@ -102,6 +102,21 @@ def test_refit_swaps_vocabulary():
     assert after["results"][0]["features"]["title_tfidf_max"] != before["results"][0]["features"]["title_tfidf_max"]
 
 
+def test_old_events_get_no_boost_from_temporal_score():
+    """The labelled days only contain temporal scores 0.9-1.0, so the shipped
+    model leaves temporal_score out; a several-days-old event (0.4) must not
+    score higher than a same-day one."""
+    matcher = load_matcher()
+    members = [{"title": "Six militants involved in extortion arrested in Manipur", "description": None}]
+    title = "Five persons held on extortion charge"
+    same_day = matcher.predict(title, None, [candidate(1, members, similarity=0.4)])
+    old = dict(candidate(1, members, similarity=0.4), temporal_score=0.4)
+    old_event = matcher.predict(title, None, [old])
+    assert "temporal_score" not in matcher.columns
+    assert old_event["results"][0]["probability"] == same_day["results"][0]["probability"]
+    assert old_event["results"][0]["features"]["temporal_score"] == 0.4      # still recorded
+
+
 def test_refit_rejects_stop_words_only():
     matcher = load_matcher()
     try:
