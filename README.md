@@ -333,7 +333,7 @@ Predicates: `innings_score` (351/9), `all_out_for`, `chased`, `set_target`, `run
 - a team followed by "'s" and a number is a total, not a player's runs
 - wickets are at most 10
 
-On the 2,455 labelled articles it finds 34 claims (24 distinct) in 26 articles. All 24 distinct claims look plausible on manual inspection. The backend shows a claim only after an admin approves it. `python test_claim_extraction.py` checks it.
+On the 2,455 labelled articles it finds 32 claims (23 distinct). They look plausible on manual inspection; one false reading ("117-ball" as runs) was found in local review and fixed. The backend shows a claim only after an admin approves it. `python test_claim_extraction.py` checks it.
 
 ### GET /health
 
