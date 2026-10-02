@@ -17,7 +17,9 @@ decision):
   (NewsEvent.addArticle)
 
 The attach decision is a function (`decide`), so approach-1 variants can be
-compared on the same harness.
+compared on the same harness. Each candidate carries its event's member rows,
+and `decide` may also return an event index outside the candidates (the oracle
+replay in evaluate_stage1.py uses this to follow the true event).
 """
 
 from dataclasses import dataclass, field
@@ -102,6 +104,7 @@ def replay(articles, decide):
                     "index": k,
                     "similarity": float(sims[j]),
                     "temporal_score": 0.5 if gap is None else float(temporal_score(np.array(gap))),
+                    "members": events[k].members,
                 })
 
         chosen = decide(article, candidates)
