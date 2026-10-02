@@ -318,6 +318,23 @@ The response is `{"extractor_version": "rules-2026-10-02", "mentions": [{"text":
 
 On the 2,455 labelled articles it finds 3.2 entities per article on average (187 articles have none). Expect some noise: demonyms ("Indian") and job titles kept with names ("captain Smit Machchhar"). `python test_entity_extraction.py` checks it.
 
+### POST /claims
+
+Numeric cricket claims in one article, for V4 roadmap step 6. It needs an `X-API-Key` header. The request is `{"title": "...", "description": "..."}`.
+
+The response is `{"extractor_version": "cricket-rules-2026-10-02", "claims": [{"subject": "Virat Kohli", "subject_normalized": "virat kohli", "predicate": "runs_scored", "value": 139, "value_text": "139", "unit": "runs", "quote": "Virat Kohli's unbeaten 139", "start": 12, "end": 38, "field": "description"}]}`.
+
+Predicates: `innings_score` (351/9), `all_out_for`, `chased`, `set_target`, `runs_scored`, `bowling_figures` (6/75), `won_by` and `lost_by`.
+
+`claim_extraction.py` uses rules and puts precision first:
+- the article must look like cricket
+- the subject must be a name right next to the number pattern
+- role words are stripped, and a subject starting with a team is cut to the team
+- a team followed by "'s" and a number is a total, not a player's runs
+- wickets are at most 10
+
+On the 2,455 labelled articles it finds 34 claims (24 distinct) in 26 articles. All 24 distinct claims look plausible on manual inspection. The backend shows a claim only after an admin approves it. `python test_claim_extraction.py` checks it.
+
 ### GET /health
 
 Returns:
