@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from sentence_transformers import SentenceTransformer
 
+from claim_extraction import claims as extract_claims
 from entity_extraction import mentions as extract_mentions
 from matcher_v2 import MEMBER_TEXT_CAP, load_matcher
 from predict import predict_event_matches
@@ -261,6 +262,24 @@ def entities(request: ArticleText):
     return {
         "extractor_version": ENTITY_EXTRACTOR_VERSION,
         "mentions": extract_mentions(request.title, request.description)
+    }
+
+# ============================================================
+# NUMERIC CLAIMS (V4 roadmap step 6)
+# ============================================================
+# Rule-based cricket claims (scores, runs, figures, margins) with the exact
+# quote and its position; the backend stores them for human review before
+# anything is shown. Bump the version when the rules change.
+
+CLAIM_EXTRACTOR_VERSION = "cricket-rules-2026-10-02"
+
+
+@app.post("/claims", dependencies=[Depends(require_api_key)])
+def claims(request: ArticleText):
+
+    return {
+        "extractor_version": CLAIM_EXTRACTOR_VERSION,
+        "claims": extract_claims(request.title, request.description)
     }
 
 # ============================================================

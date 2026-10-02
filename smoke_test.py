@@ -134,5 +134,12 @@ check({("supreme court", "name"), ("mulla afroz", "name"), ("india", "team")} <=
 status, _ = call("POST", "/entities", {"title": "x"}, api_key="wrong-key")
 check(status == 401, "/entities rejects a wrong API key with 401")
 
+status, body = call("POST", "/claims", {"title": "Kohli scores 112 as India chase 406 in the ODI"})
+check(status == 200 and body["extractor_version"].startswith("cricket"), "/claims returns 200 with a version")
+found = {(c["subject"], c["predicate"], c["value_text"]) for c in body["claims"]}
+check({("Kohli", "runs_scored", "112"), ("India", "chased", "406")} <= found, "/claims finds cricket numbers")
+status, body = call("POST", "/claims", {"title": "Rajkummar Rao plays the lawyer in the 26/11 case"})
+check(status == 200 and body["claims"] == [], "/claims ignores non-cricket articles")
+
 print(f"PASS (v1 same={v1_scores[1]:.3f}, unrelated={v1_scores[2]:.3f}; "
       f"v2 same={v2_scores[1]:.3f}, unrelated={v2_scores[2]:.3f})")
