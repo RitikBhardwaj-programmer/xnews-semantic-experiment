@@ -209,6 +209,29 @@ Production has run with `AI_EVENT_MATCHER_MODE=shadow` since 2026-10-02 07:43 UT
    - p95 latency < 1.5 s
    - no replay event larger than 2× the largest labelled true event (68, so the limit is 136)
 
+## Stage 2: lifetime cap and nightly merge pass (offline, not adopted)
+
+`python evaluate_stage2.py` (about 5 minutes) replays the three labelled days **continuously**, so events can span days, with the shipped v2 setup (variant B without `temporal_score`, nightly-style vocabulary, consistent training, 20-member cap, leave-one-day-out models). It tests:
+- a maximum event lifetime: no new articles join an event whose first activity is more than k days old
+- a merge-only pass at each day boundary: an event joins a larger active event (last 72 h, top 5 by centroid cosine) if its members' mean v2 probability reaches the model threshold
+
+Scoring is within each day, because the labels are per day. "Mixed" counts predicted events that, within one day, contain articles of two or more true events.
+
+| Setup (pooled) | B-cubed F1 | Pairwise P | Pairwise R | Pairwise F1 | Events | Mixed |
+|---|---|---|---|---|---|---|
+| v2 continuous | 0.908 | 0.738 | 0.795 | 0.765 | 1,559 | 104 |
+| + lifetime cap 2 days | 0.907 | 0.746 | 0.755 | 0.751 | 1,588 | 97 |
+| + lifetime cap 3 days | 0.908 | 0.738 | 0.795 | 0.765 | 1,559 | 104 |
+| + merge pass | 0.893 | 0.691 | 0.923 | 0.790 | 1,414 | 131 |
+
+**Decision, by the criteria fixed before the run:**
+- **Merge pass: fails.** It raises recall, but B-cubed F1 drops (difference −0.024 to −0.004, 95% interval), mixed events rise from 104 to 131, and the pairwise F1 gain isn't significant (−0.041 to +0.079). Not adopted.
+- **Lifetime cap: not adopted.**
+  - 3 days is identical to no cap; three days of data can't test it.
+  - 2 days meets the lenient "no harm" rule (intervals include 0, 7 fewer mixed events), but lowers mean pairwise F1 by 0.014 and recall by 0.04.
+  - Production already closes events after 10 days of inactivity.
+- **Caveats:** three model-labelled days; per-day labels can't reward correct cross-day continuation, which works against the merge pass and the cap alike.
+
 ## API
 
 ### POST /predict
