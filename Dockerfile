@@ -14,6 +14,7 @@ COPY predict.py .
 COPY feature_extractor.py .
 COPY event_features.py .
 COPY matcher_v2.py .
+COPY entity_extraction.py .
 COPY models ./models
 
 EXPOSE 8000

@@ -126,5 +126,13 @@ check(status == 200 and body["documents"] == 120, "/vocabulary/v2 refits on 120 
 status, after = call("POST", "/predict/v2", v2_request)
 check(status == 200 and after["vocabulary_version"] == body["vocabulary_version"], "/predict/v2 uses the refitted vocabulary")
 
+status, body = call("POST", "/entities", {"title": "Supreme Court quashes detention of Mulla Afroz",
+                                        "description": "India face West Indies in the second ODI."})
+check(status == 200 and body["extractor_version"].startswith("rules"), "/entities returns 200 with a version")
+found = {(m["normalized"], m["type"]) for m in body["mentions"]}
+check({("supreme court", "name"), ("mulla afroz", "name"), ("india", "team")} <= found, "/entities finds names and teams")
+status, _ = call("POST", "/entities", {"title": "x"}, api_key="wrong-key")
+check(status == 401, "/entities rejects a wrong API key with 401")
+
 print(f"PASS (v1 same={v1_scores[1]:.3f}, unrelated={v1_scores[2]:.3f}; "
       f"v2 same={v2_scores[1]:.3f}, unrelated={v2_scores[2]:.3f})")
