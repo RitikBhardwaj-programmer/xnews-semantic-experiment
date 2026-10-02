@@ -37,6 +37,8 @@ def test_only_cricket_and_plausible_numbers():
     assert found("Kohli scores 112 off 90 balls in the ODI") == {("Kohli", "runs_scored", "112")}
     assert found("India 26/11 in the T20 match") == set()          # 11 wickets is not a score
     assert ("India", "runs_scored", "45") not in found("India hit 45 crore in ODI sponsorship")
+    # Found in a local run: a ball count read as runs.
+    assert found("Shubman Gill's 117-ball double century tops the list of fastest ODI 200s") == set()
 
 
 def test_subjects_are_cleaned():

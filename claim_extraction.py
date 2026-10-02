@@ -33,7 +33,9 @@ CRICKET_TEST_RE = re.compile(r"\bTests?\b")
 
 # A capitalised name of 1-4 words ("India", "Shubman Gill", "West Indies").
 NAME = r"(?P<subject>[A-Z][\w'’.&-]*(?:\s+[A-Z][\w'’.&-]*){0,3})"
-NOT_UNITS = r"(?!\s*(?:balls|deliveries|overs|years|days|per|%|crore|lakh|km|million|billion|seats|votes))"
+# Not runs when a unit follows, spaced or hyphenated ("117 balls", "117-ball").
+NOT_UNITS = (r"(?![\s-]*(?:balls?|deliveries|delivery|overs?|years?|days?|per\b|%|crore|lakh|km|million"
+             r"|billion|seats|votes|minutes?))")
 
 PATTERNS = [
     ("bowling_figures", re.compile(
