@@ -168,6 +168,27 @@ It tests these with **leave-one-day-out**: train on two labelled days (oracle re
   - **Uneven across days:** B helps mostly on 30 Sep and 1 Oct. On 29 Sep its pairwise F1 matches the baseline (0.657 vs 0.660), and it puts 10% more articles into mixed events.
   - **Small, model-labelled data:** three days, labelled by a model. The pairwise intervals are wide, because a few large events dominate pair counts.
 
+### Stage 1b step 0: variant B under production conditions
+
+Production can't see a day's words before it happens, and it sends only a bounded number of member texts. Two flags test B under those conditions on the same folds:
+- `python evaluate_stage1.py --checks` (about 17 minutes) runs a frozen vocabulary and a 20-member text cap.
+- `python evaluate_stage1.py --refit` (about 3 minutes, folds in parallel) runs a vocabulary refit.
+
+| Variant B configuration (pooled) | B-cubed F1 | Pairwise P | Pairwise R | Pairwise F1 | Verdict |
+|---|---|---|---|---|---|
+| as in stage 1 (TF-IDF fitted on all days) | 0.917 | 0.814 | 0.754 | 0.783 | reference |
+| 20-member text cap | 0.915 | 0.800 | 0.783 | 0.791 | pass |
+| frozen vocabulary (training days only) | 0.890 | 0.644 | 0.855 | 0.734 | **fail** (F1 −0.048) |
+| frozen vocabulary + cap 20 | 0.896 | 0.721 | 0.836 | 0.774 | F1 pass, precision −0.093 |
+| **nightly refit + cap 20, consistent training** | **0.917** | **0.804** | **0.796** | **0.800** | **recovers** |
+| hourly refit + cap 20, consistent training | 0.917 | 0.820 | 0.732 | 0.773 | recovers |
+
+Pass rule: pairwise F1 within −0.02 of B. For a refit to count as recovering, pair precision must also stay within −0.03 of B; this rule was set before the refit run.
+
+- **The frozen-vocabulary failure is mostly a train/test mismatch.** In that check, training rows used a vocabulary that contained their own day's words, and the test day's did not. With *consistent training* (every day's rows use a vocabulary that excludes that day), precision comes back.
+- **Nightly is chosen over hourly.** It is better on F1 and simpler to run. The shipped matcher refits its vocabulary nightly on the previous 14 days.
+- **Caveat:** with only three days, each simulated vocabulary came from the neighbouring days, sometimes later ones. Labels are model-made.
+
 ## API
 
 ### POST /predict
