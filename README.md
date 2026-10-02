@@ -99,6 +99,25 @@ clearly the same story. There are no labels for that data, and a few
 cross-outlet stories about the same event still stay split, which is the cost
 of a precision-leaning threshold.
 
+## Evaluation on labelled production days
+
+The figures above come from an *oracle* replay: after every decision the article goes to its true event, so mistakes never pile up. The real grouping quality is measured instead on whole days of production traffic, labelled by hand.
+
+- `data/validation/eval_days/articles_<day>.csv`: every article collected on that UTC day (29 Sep – 1 Oct 2026), with its embedding and the production event it got. RSS descriptions stay local in `eval_days/local/` (git-ignored), because they are publishers' text.
+- `data/validation/EVENT_DEFINITION.md`: the labelling rules (one cricket match = one event; a series is a storyline).
+- `python label_events.py --day <day>`: a local labelling page on http://localhost:8765. It saves to `labels_<day>.csv` and `events_<day>.csv` after every choice.
+- `python evaluate_baseline.py --days <day> [...]`: scores production's real grouping and a free-running replay of the matcher (`replay.py`, which keeps its own mistakes) at thresholds 0.90–0.99. It reports:
+  - B-cubed, pairwise and CEAF-e precision, recall and F1, plus ARI
+  - the number and size of events
+  - 95% cluster-bootstrap intervals
+- `python test_cluster_metrics.py`: checks the metrics (`cluster_metrics.py`) on hand-computed cases.
+
+Run these with the project virtual environment (`.venv`).
+
+Sanity check: replaying each day reproduces production's event counts within about 3% (agreement ARI 0.55–0.86). It can't be exact, because production also attaches to events from before the day and processes 3 Kafka partitions in parallel.
+
+Baseline results: *pending the labelled days.*
+
 ## API
 
 ### POST /predict
