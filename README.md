@@ -192,6 +192,23 @@ Pass rule: pairwise F1 within −0.02 of B. For a refit to count as recovering, 
 - **Not covered offline:** multi-day events. Each replay starts empty, so the shadow run on production traffic is the first test with events up to 10 days old.
 - **Caveat:** with only three days, each simulated vocabulary came from the neighbouring days, sometimes later ones. Labels are model-made.
 
+### Stage 1b step 3: shadow run in production
+
+Production has run with `AI_EVENT_MATCHER_MODE=shadow` since 2026-10-02 07:43 UTC. v1 decides, and both decisions are stored in `event_match_decisions`. After 3 days:
+
+1. `python evaluate_shadow.py export-sql --from "2026-10-02 07:43" --to "2026-10-05 07:45"` writes a read-only `\copy` script, which you run with psql from `data/validation/shadow/local/` (git-ignored, because it contains descriptions).
+2. `python evaluate_shadow.py evaluate` reports:
+   - v2 health: errors by kind, and p50/p95 latency
+   - v1/v2 agreement
+   - `disagreements.csv` for labelling against `EVENT_DEFINITION.md`. Fill in `label` with `v1`, `v2`, `neither` or `unsure`, then save it as `disagreements_labelled.csv`.
+   - a free-running v2 replay of the whole window. It runs continuously, so events can span days, and it refits the vocabulary nightly as production does.
+
+   It ends with PASS/FAIL against the go-live criteria fixed in the stage 1b plan:
+   - v2's share of the disagreements it gets right has a 95% Wilson interval above 50%
+   - v2 error rate < 1%
+   - p95 latency < 1.5 s
+   - no replay event larger than 2× the largest labelled true event (68, so the limit is 136)
+
 ## API
 
 ### POST /predict
