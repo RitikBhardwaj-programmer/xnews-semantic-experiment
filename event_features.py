@@ -204,10 +204,12 @@ def _hours(later, earlier):
 class ArticleIndex:
     """Per-article precomputed signals for one or more days, addressed by row position."""
 
-    def __init__(self, articles, title_tfidf, text_tfidf):
+    def __init__(self, articles, title_tfidf, text_tfidf, text_member_cap=None):
         self.vectors = np.stack(articles["vector"].values)
         self.title_tfidf = title_tfidf
         self.text_tfidf = text_tfidf
+        # Production sends only the newest N members' texts; similarities still use all members.
+        self.text_member_cap = text_member_cap
         titles = articles["title"].fillna("")
         descriptions = articles["description"].fillna("") if "description" in articles else titles * 0
         self.entities = [entities(t) | entities(d) for t, d in zip(titles, descriptions)]
@@ -223,8 +225,9 @@ class ArticleIndex:
         vector = self.vectors[row]
         sims = self.vectors[members] @ vector
         top = np.sort(sims)[::-1]
-        title_sims = (self.title_tfidf[members] @ self.title_tfidf[row].T).toarray().ravel()
-        text_sims = (self.text_tfidf[members] @ self.text_tfidf[row].T).toarray().ravel()
+        texts = members[-self.text_member_cap:] if self.text_member_cap else members
+        title_sims = (self.title_tfidf[texts] @ self.title_tfidf[row].T).toarray().ravel()
+        text_sims = (self.text_tfidf[texts] @ self.text_tfidf[row].T).toarray().ravel()
         union = set().union(*(self.entities[m] for m in members))
         member_numbers = set().union(*(self.numbers[m] for m in members))
         seen = [self.seen[m] for m in members]

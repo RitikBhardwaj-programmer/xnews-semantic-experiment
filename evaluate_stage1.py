@@ -16,6 +16,8 @@ intervals resample true events.
 Usage:
     python evaluate_stage1.py                 (all variants)
     python evaluate_stage1.py --quick         (fewer variants, for a smoke run)
+    python evaluate_stage1.py --checks        (stage 1b: frozen vocabulary, member cap)
+    python evaluate_stage1.py --refit         (stage 1b: vocabulary refit, folds in parallel)
 """
 
 import argparse
@@ -75,16 +77,17 @@ def stripped_embeddings(frames):
     return dict(zip(allf["id"], vectors))
 
 
-def build_indexes(frames):
-    """TF-IDF fitted on all days' text (no labels used), then one ArticleIndex per day."""
+def build_indexes(frames, fit_frames=None, member_cap=None):
+    """TF-IDF fitted on `fit_frames` (default: all days; no labels used), then one
+    ArticleIndex per day. `member_cap` limits the member texts used for TF-IDF."""
     titles = TfidfVectorizer(sublinear_tf=True, min_df=1, ngram_range=(1, 2), stop_words="english")
     texts = TfidfVectorizer(sublinear_tf=True, min_df=1, stop_words="english")
-    allf = pd.concat(frames)
+    allf = pd.concat(fit_frames or frames)
     titles.fit(allf["stripped"])
     texts.fit(allf["stripped"] + " " + allf["description"].fillna(""))
     return [
         ArticleIndex(f.assign(title=f["stripped"]), titles.transform(f["stripped"]),
-                     texts.transform(f["stripped"] + " " + f["description"].fillna("")))
+                     texts.transform(f["stripped"] + " " + f["description"].fillna("")), member_cap)
         for f in frames
     ]
 
@@ -209,10 +212,134 @@ def columns_for(groups):
     return [c for g in groups for c in FEATURE_GROUPS[g]]
 
 
+def production_checks():
+    """Stage 1b step 0: variant B under production conditions, same folds.
+    - frozen vocabulary: TF-IDF fitted on the training days only
+    - member cap: only the newest 20 members' texts feed the TF-IDF features"""
+    name, groups, veto, gate, kind, _ = VARIANTS[1]
+    columns = columns_for(groups)
+    frames = [load(d) for d in DAYS]
+    truth_p = np.concatenate([[f"{d}:{x}" for x in f["truth"]] for d, f in zip(DAYS, frames)])
+    results = {"replay@0.94": [production_replay(f) for f in frames]}
+
+    for label, frozen, cap in (("B as in stage 1", False, None), ("B frozen vocabulary", True, None),
+                               ("B member cap 20", False, 20), ("B frozen + cap 20 (production)", True, 20)):
+        results[label] = []
+        shared = None if frozen else build_indexes(frames, member_cap=cap)
+        for test, day in enumerate(DAYS):
+            train_days = [d for d in range(len(DAYS)) if d != test]
+            indexes = shared or build_indexes(frames, fit_frames=[frames[d] for d in train_days], member_cap=cap)
+            train = pd.concat([oracle_rows(frames[d], indexes[d]) for d in train_days])
+            model = fit(train, columns, kind)
+            threshold = choose_threshold(model, train, columns, veto)
+            results[label].append(replay(frames[test], model_decide(model, columns, threshold, indexes[test], veto, gate)))
+        print(f"{label} done", flush=True)
+
+    pooled = {n: np.concatenate([[f"{d}:{x}" for x in p] for d, p in zip(DAYS, ps)]) for n, ps in results.items()}
+    table = pd.DataFrame({n: summary(truth_p, p) for n, p in pooled.items()}).T
+    with pd.option_context("display.width", 200, "display.float_format", lambda x: f"{x:.3f}"):
+        print(table[["bcubed_f1", "pair_p", "pair_r", "pair_f1", "events_pred", "largest_pred"]].to_string())
+    reference = table.loc["B as in stage 1", "pair_f1"]
+    for label in ("B frozen vocabulary", "B member cap 20", "B frozen + cap 20 (production)"):
+        change = table.loc[label, "pair_f1"] - reference
+        print(f"  {label}: pairwise F1 change {change:+.3f} -> {'PASS' if change >= -0.02 else 'FAIL'} (limit -0.02)")
+
+
+class RefitIndex(ArticleIndex):
+    """ArticleIndex whose TF-IDF matrices depend on the querying article's refit bucket:
+    article and member texts are transformed by the vectorisers fitted before that bucket."""
+
+    def __init__(self, articles, matrices, bucket_of_row, member_cap):
+        first = next(iter(matrices.values()))
+        super().__init__(articles, first[0], first[1], member_cap)
+        self.matrices, self.bucket_of_row = matrices, bucket_of_row
+
+    def features(self, row, members, similarity, temporal_score):
+        self.title_tfidf, self.text_tfidf = self.matrices[self.bucket_of_row[row]]
+        return super().features(row, members, similarity, temporal_score)
+
+
+def refit_index(frames, day, context_days, member_cap, hourly):
+    """Vocabulary from `context_days` only (never the day itself), plus, when hourly,
+    the day's own articles created before the article's hour."""
+    f = frames[day]
+    context = pd.concat([frames[d] for d in context_days])
+    hours = f["created_at"].dt.floor("h")
+    codes, starts = pd.factorize(hours) if hourly else (np.zeros(len(f), dtype=int), [None])
+    matrices = {}
+    for code, start in enumerate(starts):
+        seen = pd.concat([context, f[f["created_at"] < start]]) if hourly else context
+        titles = TfidfVectorizer(sublinear_tf=True, min_df=1, ngram_range=(1, 2), stop_words="english")
+        texts = TfidfVectorizer(sublinear_tf=True, min_df=1, stop_words="english")
+        titles.fit(seen["stripped"])
+        texts.fit(seen["stripped"] + " " + seen["description"].fillna(""))
+        matrices[code] = (titles.transform(f["stripped"]),
+                          texts.transform(f["stripped"] + " " + f["description"].fillna("")))
+    return RefitIndex(f.assign(title=f["stripped"]), matrices, codes, member_cap)
+
+
+REFIT_LABELS = ("replay@0.94", "B as in stage 1", "B nightly refit + cap 20", "B hourly refit + cap 20")
+
+
+def refit_fold(frames, label, test):
+    """One (configuration, held-out day) cell of refit_checks; independent, so cells run in parallel."""
+    if label == "replay@0.94":
+        return production_replay(frames[test]), None
+    name, groups, veto, gate, kind, _ = VARIANTS[1]
+    columns = columns_for(groups)
+    train_days = [d for d in range(len(DAYS)) if d != test]
+    if label == "B as in stage 1":
+        shared = build_indexes(frames)
+        train_indexes, test_index = [shared[d] for d in train_days], shared[test]
+    else:
+        hourly = label.startswith("B hourly")
+        train_indexes = [refit_index(frames, d, [c for c in train_days if c != d], 20, hourly) for d in train_days]
+        test_index = refit_index(frames, test, train_days, 20, hourly)
+    train = pd.concat([oracle_rows(frames[d], i) for d, i in zip(train_days, train_indexes)])
+    model = fit(train, columns, kind)
+    threshold = choose_threshold(model, train, columns, veto)
+    return replay(frames[test], model_decide(model, columns, threshold, test_index, veto, gate)), threshold
+
+
+def refit_checks():
+    """Stage 1b step 0b: does refitting the vocabulary recover the frozen-vocabulary loss?
+    Training rows are built under the same vocabulary conditions as the test day."""
+    from joblib import Parallel, delayed
+    frames = [load(d) for d in DAYS]
+    truth_p = np.concatenate([[f"{d}:{x}" for x in f["truth"]] for d, f in zip(DAYS, frames)])
+    cells = [(label, test) for label in REFIT_LABELS for test in range(len(DAYS))]
+    outputs = Parallel(n_jobs=min(len(cells), os.cpu_count() or 1), verbose=5)(
+        delayed(refit_fold)(frames, label, test) for label, test in cells)
+    results = {label: [None] * len(DAYS) for label in REFIT_LABELS}
+    for (label, test), (assigned, threshold) in zip(cells, outputs):
+        results[label][test] = assigned
+        if threshold is not None:
+            print(f"  {label}: fold {DAYS[test]} threshold {threshold}")
+
+    pooled = {n: np.concatenate([[f"{d}:{x}" for x in p] for d, p in zip(DAYS, ps)]) for n, ps in results.items()}
+    table = pd.DataFrame({n: summary(truth_p, p) for n, p in pooled.items()}).T
+    with pd.option_context("display.width", 200, "display.float_format", lambda x: f"{x:.3f}"):
+        print(table[["bcubed_f1", "pair_p", "pair_r", "pair_f1", "events_pred", "largest_pred"]].to_string())
+    reference = table.loc["B as in stage 1"]
+    for label in ("B nightly refit + cap 20", "B hourly refit + cap 20"):
+        f1 = table.loc[label, "pair_f1"] - reference["pair_f1"]
+        precision = table.loc[label, "pair_p"] - reference["pair_p"]
+        verdict = "RECOVERS" if f1 >= -0.02 and precision >= -0.03 else "DOES NOT RECOVER"
+        print(f"  {label}: pairwise F1 {f1:+.3f} (limit -0.02), pair precision {precision:+.3f} (limit -0.03) -> {verdict}")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--quick", action="store_true")
+    parser.add_argument("--checks", action="store_true", help="stage 1b production-condition checks")
+    parser.add_argument("--refit", action="store_true", help="stage 1b vocabulary-refit checks")
     args = parser.parse_args()
+    if args.checks:
+        production_checks()
+        return
+    if args.refit:
+        refit_checks()
+        return
     variants = VARIANTS[:2] if args.quick else VARIANTS
     started = time.time()
 
